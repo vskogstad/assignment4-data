@@ -6,8 +6,8 @@ from typing import Any
 
 
 def run_extract_text_from_html_bytes(html_bytes: bytes) -> str | None:
-    raise NotImplementedError
-
+    from cs336_data.convert import extract_text
+    return extract_text(html_bytes)
 
 def run_identify_language(text: str) -> tuple[Any, float]:
     raise NotImplementedError
