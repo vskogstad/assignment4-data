@@ -4,13 +4,16 @@ import os
 from typing import Any
 
 
-
 def run_extract_text_from_html_bytes(html_bytes: bytes) -> str | None:
     from cs336_data.convert import extract_text
+
     return extract_text(html_bytes)
 
+
 def run_identify_language(text: str) -> tuple[Any, float]:
-    raise NotImplementedError
+    from cs336_data.convert import identify_language
+
+    return identify_language(text)
 
 
 def run_mask_emails(text: str) -> tuple[str, int]:
@@ -41,9 +44,7 @@ def run_gopher_quality_filter(text: str) -> bool:
     raise NotImplementedError
 
 
-def run_exact_line_deduplication(
-    input_files: list[os.PathLike], output_directory: os.PathLike
-):
+def run_exact_line_deduplication(input_files: list[os.PathLike], output_directory: os.PathLike):
     raise NotImplementedError
 
 
