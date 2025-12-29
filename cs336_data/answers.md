@@ -133,3 +133,8 @@ c)
 
 Found a few errors in my original list where I had miscounted which document I was on. The classifier is correct for everything but the 404 site. Cutoff in the 60's could be good. Depends on what languages you are serching for. Some are easier to find than others and could have higher cutoff. Eg. Greek and icelandic.
 
+
+mask_pii
+
+4.  Our model will type out the |||PHONE_NUMBER||| token quite often in situations where you would want to add a number, this might not be what you want for a useful model. You could replace the token with randomly generated phone number or IP-adresses, or you could
+5.  

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import fasttext
+import regex as re
 from fastwarc.stream_io import *
 from fastwarc.warc import ArchiveIterator, WarcRecordType, has_block_digest
 from resiliparse.extract.html2text import extract_plain_text
@@ -12,9 +13,9 @@ def extract_text(html_bytes):
     try:
         text = html_bytes.decode("utf-8")
     except UnicodeDecodeError as e:
-        #print("Decoding Error:", e)
+        # print("Decoding Error:", e)
         enc = detect_encoding(html_bytes)
-        #print(enc)
+        # print(enc)
         text = html_bytes.decode(enc)
     a = extract_plain_text(text)
     # print(f" {a =} ")
@@ -26,28 +27,41 @@ def identify_language(text):
     # TODO: Use .bin for bigger runs
     pretrained_classifier = "cs336_data/lid.176.ftz"
     model = fasttext.load_model(pretrained_classifier)
-    text = " ".join([sentence for sentence in text.split("\n")])# THIS IS A HACK. Will give the classifier multiline text that it's not trained on.
+    text = " ".join(
+        [sentence for sentence in text.split("\n")]
+    )  # THIS IS A HACK. Will give the classifier multiline text that it's not trained on.
     language, score = model.predict(text)
-    
+
     return language[0].split("__label__")[1], float(score[0])
 
 
 def mask_emails(text):
+    email_regex = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")
+    split_text = re.split(email_regex, text)
+    num_masks = len(split_text) - 1
+    return ("|||EMAIL_ADDRESS|||".join(split_text), num_masks)
 
 
 def mask_phone_numbers(text):
-    pass
+    phone_regex = re.compile(r"^(\+1[-.\s]?)?(\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}$")
+    split_text = re.split(phone_regex, text)
+    num_masks = len(split_text) - 1
+    return ("|||PHONE_NUMBER|||".join(split_text), num_masks)
+
 
 def mask_ips(text):
-    pass
+    ip_regex = re.compile(r"^[0-9]+.[0-9]+.[0-9]+.[0-9]+$")
+    split_text = re.split(ip_regex, text)
+    num_masks = len(split_text) - 1
+    return ("|||IP_ADRESS|||".join(split_text), num_masks)
 
 
 if __name__ == "__main__":
     stream = GZipStream(FileStream("cs336_data/data/CC_example.warc.gz", "rb"))
     i = 0
     for record in ArchiveIterator(stream, func_filter=has_block_digest):
-        #print(record.record_id)
-        #print(record.content_length)
+        # print(record.record_id)
+        # print(record.content_length)
         bytes = record.reader.read()
         text = extract_text(bytes)
         print(i, identify_language(text))
