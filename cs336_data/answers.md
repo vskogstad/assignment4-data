@@ -146,3 +146,29 @@ harmful_content
 12 ('toxic', 0.9986945986747742) ('nsfw', 0.9331870079040527) -Definitely nsfw. Perhaps more so than toxic?
 13 ('non-toxic', 0.6488198041915894) ('non-nsfw', 0.6640000939369202) -Encoding error. Doesn't hurt to remove though. Same is the case for others with lower certainty.
 18 ('non-toxic', 0.8875401020050049) ('non-nsfw', 0.9842084646224976)   -Benign raid info for WOW I think
+
+
+gopher_quality_filter
+
+b)
+
+0 False     - Meh, some usable text in there
+1 True      - OK
+2 True      - No. This is useless. Just one-word lines all the way.
+3 False     - OK
+4 False     - OK
+5 False     - Not sure, a bunch of niche music info in list form, filtered out because of paranthesis and space misuse. Fails alphabetic.
+6 True      - Good!
+7 False     - OK
+8 True      - OK
+9 False     - OK
+10 True     - Wrong. Just a bunch of site menu items, no sentences.
+11 False    - OK
+12 True     - Correct
+13 False    - OK. A lot of blog links, fails alpha
+14 False    - OK. Same
+15 False    - Puzzled why this failed on alphabetic It is not useful though. Reran with 70 % instead of 80 and this passes, so barely too much.
+16 False    - Same as above.
+17 True     - Quite high quality blog.
+18 False    - Lorem ipsum, worthless.
+19 True     - Sample wordpress page. 

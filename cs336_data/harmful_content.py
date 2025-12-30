@@ -7,7 +7,15 @@ from fastwarc.stream_io import *
 from fastwarc.warc import ArchiveIterator, WarcRecordType, has_block_digest
 from resiliparse.extract.html2text import extract_plain_text
 from resiliparse.parse.encoding import detect_encoding
+import nltk
 
+def ensure_nltk_data():
+    try:
+        nltk.data.find('tokenizers/punkt_tab')
+    except LookupError:
+        nltk.download('punkt_tab', quiet=True)
+
+ensure_nltk_data()
 
 def extract_text(html_bytes):
     """Extracts text from bytestream"""
@@ -67,12 +75,47 @@ def classify_toxic_speech(text):
 
     return language[0].split("__label__")[1], float(score[0])
 
-def classify_quality(text):
-    pass
+def gopher_quality_filter(text):
+    words = nltk.word_tokenize(text)
+
+    # Contain less than 50 or more than 100_000
+    num_words = len(words)
+    if num_words > 100_000 or num_words < 50:
+        return False
+    
+    # Mean word length below 3 or above 10
+    word_length = 0
+    for word in words:
+        word_length += len(word)
+    avg_word_length = word_length / num_words
+    if avg_word_length > 10 or avg_word_length < 3:
+        return False
+    
+    # more than 30 % of lines ending with ellipsis
+    line_text = text.split("\n")
+    total_lines = len(line_text)
+    ellipsis_lines = 0
+
+    for line in line_text:
+        if line[-3:] == "...":
+            ellipsis_lines += 1
+    if ellipsis_lines/total_lines > 0.3:
+        return False
+
+    # contain less than 80 % of words with at least one alphabetic character
+    num_alphabetic_words = 0
+    for word in words:
+        if word.isalpha() or (word.isalnum() and not word.isdigit()):
+            num_alphabetic_words += 1
+    
+    if num_alphabetic_words / num_words < 0.8:
+        return False
+
+    return True
 
 
 if __name__ == "__main__":
-    random.seed(42)
+    random.seed(45)
     stream = GZipStream(FileStream("cs336_data/data/CC_example.warc.gz", "rb"))
     i = 0
     for record in ArchiveIterator(stream, func_filter=has_block_digest):
@@ -84,8 +127,8 @@ if __name__ == "__main__":
             bytes = record.reader.read()
             text = extract_text(bytes)
             if identify_language(text)[0] == "en":
-                print(text)
-                print(i, classify_toxic_speech(text), classify_nsfw(text))
+                #print(text)
+                print(i, gopher_quality_filter(text))#classify_toxic_speech(text), classify_nsfw(text))
                 i += 1
-                if i == 13:
+                if i == 20:
                     break
