@@ -84,8 +84,8 @@ if __name__ == "__main__":
             bytes = record.reader.read()
             text = extract_text(bytes)
             if identify_language(text)[0] == "en":
-                #print(text)
+                print(text)
                 print(i, classify_toxic_speech(text), classify_nsfw(text))
                 i += 1
-                if i == 20:
+                if i == 13:
                     break

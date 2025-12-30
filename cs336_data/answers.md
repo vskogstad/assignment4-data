@@ -141,5 +141,8 @@ mask_pii
 
 
 harmful_content
-3.
-4.
+3. No exposure to that vocabulary at all. Harder to parse toxic feedback/questions. Harder to reinforcement learn on how to respond?
+4. Had to use english only filter to get a toxic result. Generally the classifiers are very confident, but I got two samples in a row with different scores:
+12 ('toxic', 0.9986945986747742) ('nsfw', 0.9331870079040527) -Definitely nsfw. Perhaps more so than toxic?
+13 ('non-toxic', 0.6488198041915894) ('non-nsfw', 0.6640000939369202) -Encoding error. Doesn't hurt to remove though. Same is the case for others with lower certainty.
+18 ('non-toxic', 0.8875401020050049) ('non-nsfw', 0.9842084646224976)   -Benign raid info for WOW I think
