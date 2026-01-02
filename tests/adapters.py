@@ -47,15 +47,15 @@ def run_classify_toxic_speech(text: str) -> tuple[Any, float]:
 
 
 def run_classify_quality(text: str) -> tuple[Any, float]:
-    from cs336_data.harmful_content import gopher_quality_filter
+    from cs336_data.harmful_content import quality_filter
 
-    return gopher_quality_filter(text)
+    return quality_filter(text)
 
 
 def run_gopher_quality_filter(text: str) -> bool:
     from cs336_data.harmful_content import gopher_quality_filter
 
-    return gopher_quality_filter(text)
+    return gopher_quality_filter(text)[0]
 
 
 def run_exact_line_deduplication(input_files: list[os.PathLike], output_directory: os.PathLike):
