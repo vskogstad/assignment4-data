@@ -73,5 +73,5 @@ def run_minhash_deduplication(
     output_directory: os.PathLike,
 ):
     from cs336_data.deduplication import min_hash_deduplication
-    min_hash_deduplication(input_files, num_hashes, num_bands, ngrams, output_directory)
+    return min_hash_deduplication(input_files, num_hashes, num_bands, ngrams, jaccard_threshold, output_directory)
 
