@@ -35,31 +35,33 @@ def run_mask_ips(text: str) -> tuple[str, int]:
 
 
 def run_classify_nsfw(text: str) -> tuple[Any, float]:
-    from cs336_data.harmful_content import classify_nsfw
+    from cs336_data.classifiers import classify_nsfw
 
     return classify_nsfw(text)
 
 
 def run_classify_toxic_speech(text: str) -> tuple[Any, float]:
-    from cs336_data.harmful_content import classify_toxic_speech
+    from cs336_data.classifiers import classify_toxic_speech
 
     return classify_toxic_speech(text)
 
 
 def run_classify_quality(text: str) -> tuple[Any, float]:
-    from cs336_data.harmful_content import quality_filter
+    from cs336_data.classifiers import classify_quality
 
-    return quality_filter(text)
+    return classify_quality(text)
 
 
 def run_gopher_quality_filter(text: str) -> bool:
-    from cs336_data.harmful_content import gopher_quality_filter
+    from cs336_data.classifiers import gopher_quality_filter
 
     return gopher_quality_filter(text)[0]
 
 
 def run_exact_line_deduplication(input_files: list[os.PathLike], output_directory: os.PathLike):
-    raise NotImplementedError
+    from cs336_data.deduplication import exact_deduplication
+    
+    return exact_deduplication(input_files, output_directory)
 
 
 def run_minhash_deduplication(
@@ -70,4 +72,6 @@ def run_minhash_deduplication(
     jaccard_threshold: float,
     output_directory: os.PathLike,
 ):
-    raise NotImplementedError
+    from cs336_data.deduplication import min_hash_deduplication
+    min_hash_deduplication(input_files, num_hashes, num_bands, ngrams, output_directory)
+

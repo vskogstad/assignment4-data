@@ -17,7 +17,7 @@ def ensure_nltk_data():
         nltk.download("punkt_tab", quiet=True)
 
 
-ensure_nltk_data()
+ensure_nltk_data() # can't store this within folder structure, need to ensure it is downloaded if not found.
 
 
 def extract_text(html_bytes):
@@ -79,6 +79,18 @@ def classify_toxic_speech(text):
 
     return language[0].split("__label__")[1], float(score[0])
 
+def classify_quality(text):
+    # Identifies quality (similarity to page linked from wikipedia) using a pretrained fasttext classifier.
+    pretrained_classifier = "cs336_data/classifiers/quality.bin"
+    model = fasttext.load_model(pretrained_classifier)
+    text = " ".join(
+        [sentence for sentence in text.split("\n")]
+    )  # This is fine. Will give the classifier multiline text joined together. Same as what it's trained on.
+
+    language, score = model.predict(text)
+
+    return language[0].split("__label__")[1], float(score[0])
+
 
 def gopher_quality_filter(text, include_alphabetic=True):
     words = nltk.word_tokenize(text)
@@ -130,10 +142,6 @@ def write_to_fasttext_training_data(filepath_out, label_out, filepath_in_warc="c
     i = 0
     with open(file=filepath_out, mode="w", encoding="utf-8") as f:
         for record in ArchiveIterator(stream, func_filter=min_content_filter):
-            # print(record.record_id)
-            # print(record.content_length)
-            # print(record.record_id)
-            # print(record.content_length)
             bytes = record.reader.read()
             text = extract_text(bytes)
             # Going through the pipeline step by step
@@ -143,20 +151,20 @@ def write_to_fasttext_training_data(filepath_out, label_out, filepath_in_warc="c
                 and classify_nsfw(text)[0] == "non-nsfw"
                 and classify_toxic_speech(text)[0] == "non-toxic"
             ):
-                # print(text[:150])
-                # print(i, classify_nsfw(text))
-                # print(i, classify_toxic_speech(text))
-                # print(i, gopher_quality_filter(text, False))#classify_toxic_speech(text), classify_nsfw(text))
                 text = label_out + " " + " ".join(text.split()) + "\n"
                 f.write(text)
-                #print(text[:300])
                 i += 1
                 if i == num_records: # if not specified , we will iterate over entire warc-file
                     break
 
+def train_fasttext_quality_filter(training_file, validation_file, output_file, ):
+    model = fasttext.train_supervised(input=training_file, epoch=10, lr=1)
+    print(model.test(validation_file))
+    model.save_model(output_file)
 
 if __name__ == "__main__":
-    write_to_fasttext_training_data("cs336_data/data/training_positive.txt", "__label__wiki","cs336_data/data/sampled_positive_urls.warc.warc.gz")
+    #train_fasttext_quality_filter("cs336_data/data/training_shuffled.txt", "cs336_data/data/validation.txt", "cs336_data/classifiers/quality.bin")
+    # write_to_fasttext_training_data("cs336_data/data/training_positive.txt", "__label__wiki","cs336_data/data/sampled_positive_urls.warc.warc.gz")
     # write_to_fasttext_training_data("cs336_data/data/training_negative.txt", "__label__cc", "cs336_data/data/CC_example.warc.gz")
     import sys
 
