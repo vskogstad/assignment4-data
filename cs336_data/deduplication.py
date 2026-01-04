@@ -63,7 +63,7 @@ def min_hash_deduplication(filepaths, num_hashes, num_bands, ngrams, jaccard_thr
                     d1_ngrams = doc_ngram_sets[value[p1]]
                     for p2 in range(p1+1, num_docs):
                         if {value[p1], value[p2]} in clusters:
-                            break
+                            continue
                             print("could avoid computing this again")
                         d2_ngrams = doc_ngram_sets[value[p2]]
                         # Do jaccards similarity:
@@ -102,7 +102,7 @@ def min_hash_deduplication(filepaths, num_hashes, num_bands, ngrams, jaccard_thr
     for file in filepaths:
         print(file)
         if file in duplicates:
-            break
+            continue
             #print("-----More than one option", value)
             #file = random.choice(list(value))
         outfile = Path(output_dir) / Path(file).name
