@@ -20,16 +20,14 @@ def exact_deduplication(filepaths, output_directory):
     for file in filepaths:
         outfile = Path(output_directory) / Path(file).name
         with open(file) as f, open(outfile, "w") as g:
-            deduplicated_lines = []
             for line in f.readlines():
                 key = hash(line)
                 if counts[key] == 1:
-                    deduplicated_lines.append(line)
-            g.writelines(deduplicated_lines)
+                    g.writelines(line)
 
 
 def min_hash_deduplication(filepaths, num_hashes, num_bands, ngrams, jaccard_threshold, output_dir):
-    # implementation of union find for clustering:
+    # implementation of union find algo for clustering:
     parent = {file: file for file in filepaths}
 
     def union(a, b):
@@ -90,7 +88,7 @@ def min_hash_deduplication(filepaths, num_hashes, num_bands, ngrams, jaccard_thr
                         jaccard = len(d1_ngrams & d2_ngrams) / len(d1_ngrams | d2_ngrams)
                         if jaccard > jaccard_threshold:
                             # print(f"jaccard similarity above threshold for {docs[i]}, {docs[j]}")
-                            union(docs[i], docs[j])
+                            union(docs[i], docs[j]) 
 
     clusters = defaultdict(set)  # merge across clusters to single parent file
     for file in filepaths:
@@ -103,9 +101,6 @@ def min_hash_deduplication(filepaths, num_hashes, num_bands, ngrams, jaccard_thr
         # print(file)
         outfile = Path(output_dir) / Path(file).name
         with open(file) as f, open(outfile, "w") as g:  # not clean, but should work.
-            deduplicated_lines = []
-            for line in f.readlines():
-                deduplicated_lines.append(line)
-            g.writelines(deduplicated_lines)
+            g.write(f.read())
 
     return

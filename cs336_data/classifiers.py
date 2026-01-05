@@ -9,6 +9,12 @@ from fastwarc.warc import ArchiveIterator, WarcRecordType, has_block_digest
 from resiliparse.extract.html2text import extract_plain_text
 from resiliparse.parse.encoding import detect_encoding
 
+# Load once at module level
+LANG_MODEL = fasttext.load_model("cs336_data/classifiers/lid.176.ftz")
+NSFW_MODEL = fasttext.load_model("cs336_data/classifiers/jigsaw_fasttext_bigrams_nsfw_final.bin")
+TOXIC_MODEL = fasttext.load_model("cs336_data/classifiers/jigsaw_fasttext_bigrams_hatespeech_final.bin")
+QUALITY_MODEL = fasttext.load_model("cs336_data/classifiers/quality.bin")
+
 
 def ensure_nltk_data():
     try:
@@ -30,6 +36,7 @@ def extract_text(html_bytes):
         try:
             text = html_bytes.decode(enc)
         except (UnicodeDecodeError, LookupError):
+            print("Trying to replace and force utf-8")
             text = html_bytes.decode("utf-8", errors="replace")  # Last resort: force UTF-8 with replacement characters
     a = extract_plain_text(text)
     # print(f" {a =} ")
@@ -39,8 +46,7 @@ def extract_text(html_bytes):
 def identify_language(text):
     # Identifies language using a pretrained fasttext classifier.
     # TODO: Use .bin for bigger runs
-    pretrained_classifier = "cs336_data/classifiers/lid.176.ftz"
-    model = fasttext.load_model(pretrained_classifier)
+    model = LANG_MODEL
     text = " ".join(
         [sentence for sentence in text.split("\n")]
     )  # THIS IS A HACK. Will give the classifier multiline text that it's not trained on.
@@ -52,8 +58,7 @@ def identify_language(text):
 def classify_nsfw(text):
     # Identifies nsfw language using a pretrained fasttext classifier.
     # TODO: Use .bin for bigger runs
-    pretrained_classifier = "cs336_data/classifiers/jigsaw_fasttext_bigrams_nsfw_final.bin"
-    model = fasttext.load_model(pretrained_classifier)
+    model = NSFW_MODEL
     text = " ".join(
         [sentence for sentence in text.split("\n")]
     )  # THIS IS A HACK. Will give the classifier multiline text that it's not trained on.
@@ -65,8 +70,7 @@ def classify_nsfw(text):
 def classify_toxic_speech(text):
     # Identifies language using a pretrained fasttext classifier.
     # TODO: Use .bin for bigger runs
-    pretrained_classifier = "cs336_data/classifiers/jigsaw_fasttext_bigrams_hatespeech_final.bin"
-    model = fasttext.load_model(pretrained_classifier)
+    model = TOXIC_MODEL
     text = " ".join(
         [sentence for sentence in text.split("\n")]
     )  # THIS IS A HACK. Will give the classifier multiline text that it's not trained on.
@@ -81,8 +85,7 @@ def classify_toxic_speech(text):
 
 def classify_quality(text):
     # Identifies quality (similarity to page linked from wikipedia) using a pretrained fasttext classifier.
-    pretrained_classifier = "cs336_data/classifiers/quality.bin"
-    model = fasttext.load_model(pretrained_classifier)
+    model = QUALITY_MODEL
     text = " ".join(
         [sentence for sentence in text.split("\n")]
     )  # This is fine. Will give the classifier multiline text joined together. Same as what it's trained on.
@@ -92,8 +95,31 @@ def classify_quality(text):
     return language[0].split("__label__")[1], float(score[0])
 
 
-def gopher_quality_filter(text, include_alphabetic=True):
-    words = nltk.word_tokenize(text)
+def gopher_quality_filter(text, include_alphabetic=True, blocked_content=False, remove_pdfs=False):
+    if remove_pdfs:
+        if text.startswith("%PDF"):
+            print("PDF removed")
+            return False, "PDF"
+        
+    if blocked_content:
+        if "page not found" in text[:50].lower():
+            print("page not found")
+            return False, "Page not found"
+        
+        if "error" in text[:50].lower():
+            print("Error")
+            return False, "Error"
+        
+        if "Cloudflare Ray ID" in text[-2000:]:
+            print("Cloudflare removed")
+            return False, "Cloudfare"
+    
+    if len(text) > 600000 or len(text) < 200:
+        print("Len blocked")
+        return False, "Num_words"        
+    
+    
+    words = text.split() #nltk.word_tokenize(text)
 
     # Contain less than 50 or more than 100_000
     num_words = len(words)
@@ -142,17 +168,20 @@ def write_to_fasttext_training_data(filepath_out, label_out, filepath_in_warc="c
     i = 0
     with open(file=filepath_out, mode="w", encoding="utf-8") as f:
         for record in ArchiveIterator(stream, func_filter=min_content_filter):
+            if record.content_length > 5_000_000:
+                continue
             bytes = record.reader.read()
             text = extract_text(bytes)
             # Going through the pipeline step by step
             if (
                 identify_language(text)[0] == "en"
-                and gopher_quality_filter(text, False)[0]
+                and gopher_quality_filter(text, include_alphabetic=False, blocked_content=True, remove_pdfs=True)[0]
                 and classify_nsfw(text)[0] == "non-nsfw"
                 and classify_toxic_speech(text)[0] == "non-toxic"
             ):
                 text = label_out + " " + " ".join(text.split()) + "\n"
                 f.write(text)
+                #print(record.record_id)
                 i += 1
                 if i == num_records: # if not specified , we will iterate over entire warc-file
                     break
@@ -164,7 +193,7 @@ def train_fasttext_quality_filter(training_file, validation_file, output_file, )
 
 if __name__ == "__main__":
     #train_fasttext_quality_filter("cs336_data/data/training_shuffled.txt", "cs336_data/data/validation.txt", "cs336_data/classifiers/quality.bin")
-    # write_to_fasttext_training_data("cs336_data/data/training_positive.txt", "__label__wiki","cs336_data/data/sampled_positive_urls.warc.warc.gz")
+    write_to_fasttext_training_data("cs336_data/data/training_positive.txt", "__label__wiki","cs336_data/data/sampled_positive_urls.warc.warc.gz")
     # write_to_fasttext_training_data("cs336_data/data/training_negative.txt", "__label__cc", "cs336_data/data/CC_example.warc.gz")
     import sys
 
