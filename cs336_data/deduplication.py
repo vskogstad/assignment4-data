@@ -1,8 +1,10 @@
+import random
 import string
 import unicodedata
-import random
-import mmh3
+from collections import defaultdict
 from pathlib import Path
+
+import mmh3
 
 
 def exact_deduplication(filepaths, output_directory):
@@ -27,90 +29,83 @@ def exact_deduplication(filepaths, output_directory):
 
 
 def min_hash_deduplication(filepaths, num_hashes, num_bands, ngrams, jaccard_threshold, output_dir):
-    # count unique lines
+    # implementation of union find for clustering:
+    parent = {file: file for file in filepaths}
+
+    def union(a, b):
+        # joins two sets at their root
+        root_a, root_b = find(a), find(b)
+        parent[root_a] = root_b
+
+    def find(x):
+        # finds root parent recursively
+        if parent[x] != x:
+            parent[x] = find(parent[x])
+        return parent[x]
+
+    # min hash algorithm with bucketing and lsh
     doc_ngram_sets = {}
     buckets = [{} for _ in range(num_bands)]
     for file in filepaths:
         with open(file) as f:
             text = f.read()
-            translator = str.maketrans("", "", string.punctuation) # Remove punctation
+            translator = str.maketrans("", "", string.punctuation)  # Remove punctation
             clean_text = text.translate(translator).lower()
             normalized_text = unicodedata.normalize("NFD", clean_text)
             word_list = normalized_text.split()
-            doc_ngrams = set(" ".join(a) for a in zip(*[word_list[i:] for i in range(ngrams)])) # builds the ngrams, will fail for documents with num_words < ngrams.
+            doc_ngrams = set(
+                " ".join(a) for a in zip(*[word_list[i:] for i in range(ngrams)])
+            )  # builds the ngrams, will fail for documents with num_words < ngrams.
             doc_ngram_sets[file] = doc_ngrams
-            #print(file_ngrams[:3])
+            # print(file_ngrams[:3])
             signature = []
             for k in range(num_hashes):
-                signature.append(min([mmh3.hash(ngram, seed=k) for ngram in doc_ngrams])) # using mmh3 to get a distinct hash function for each k.
-            
+                signature.append(
+                    min([mmh3.hash(ngram, seed=k) for ngram in doc_ngrams])
+                )  # using mmh3 to get a distinct hash function for each k.
+
             # split signature into bands:
-            r = num_hashes//num_bands
+            r = num_hashes // num_bands
             for j in range(num_bands):
-                sig_band = hash(tuple(signature[j*r:(j+1)*r])) 
+                sig_band = hash(tuple(signature[j * r : (j + 1) * r]))
                 # store signature
                 temp = buckets[j].get(sig_band, [])
                 temp.append(file)
                 buckets[j][sig_band] = temp
-    
-    clusters = []
+
     for bucket in buckets:
-        for value in bucket.values():
-            num_docs = len(value)
+        for docs in bucket.values():
+            num_docs = len(docs)
             if num_docs > 1:
-                print(f"checking jaccard similarity for {num_docs} documents, among those {value[0]}, {value[1]}")
-                for p1 in range(num_docs-1):
-                    d1_ngrams = doc_ngram_sets[value[p1]]
-                    for p2 in range(p1+1, num_docs):
-                        if {value[p1], value[p2]} in clusters:
+                # print(f"checking jaccard similarity for {num_docs} documents, among those {docs[0]}, {docs[1]}")
+                for i in range(num_docs - 1):
+                    d1_ngrams = doc_ngram_sets[docs[i]]
+                    for j in range(i + 1, num_docs):
+                        if parent[docs[i]] == docs[j] or parent[docs[j]] == docs[i]:
                             continue
                             print("could avoid computing this again")
-                        d2_ngrams = doc_ngram_sets[value[p2]]
+
+                        d2_ngrams = doc_ngram_sets[docs[j]]
                         # Do jaccards similarity:
-                        j = len(d1_ngrams & d2_ngrams) / len(d1_ngrams | d2_ngrams)
-                        if j > jaccard_threshold:
-                            print(f"jaccard similarity above threshold for {value[p1]}, {value[p2]}")
-                            clusters.append({value[p1], value[p2]})
+                        jaccard = len(d1_ngrams & d2_ngrams) / len(d1_ngrams | d2_ngrams)
+                        if jaccard > jaccard_threshold:
+                            # print(f"jaccard similarity above threshold for {docs[i]}, {docs[j]}")
+                            union(docs[i], docs[j])
 
-    print(clusters)
-    merged_clusters = clusters
-    # manipulate to get all clusters from matches in different buckets.
-    """merged_clusters = [set() for _ in clusters]
-    merges = 1
-    while(merges > 1):
-        merges = 0
-        for cluster in clusters:
-            for i in range(len(merged_clusters)):
-                if len(cluster & merged_clusters[i]) > 0 or merged_clusters[i] == set():
-                    merged_clusters[i] = merged_clusters[i] | cluster
-                    merges = 1
-                    break
-                else:
-                    merged_clusters[i] = cluster"""
-
-    # remove one random choice from each cluster
-    # 
-    # merge across clusters into duplicates set  
-    print(type(merged_clusters))
-    unlucky = random.choice(list(merged_clusters[0]))  
-    print("unlucky", unlucky)       
-    print("<<<<<<<<<<<", merged_clusters)
-    merged_clusters[0].remove(unlucky)
-    duplicates = merged_clusters[0]
-
-
+    clusters = defaultdict(set)  # merge across clusters to single parent file
     for file in filepaths:
-        print(file)
-        if file in duplicates:
-            continue
-            #print("-----More than one option", value)
-            #file = random.choice(list(value))
+        clusters[find(file)].add(file)
+    # print(clusters)
+    # Pick one random choice from each cluster
+    deduplicated = [random.choice(list(v)) for k, v in clusters.items()]
+
+    for file in deduplicated:
+        # print(file)
         outfile = Path(output_dir) / Path(file).name
-        with open(file) as f, open(outfile, "w") as g: # not clean, but should work.
+        with open(file) as f, open(outfile, "w") as g:  # not clean, but should work.
             deduplicated_lines = []
             for line in f.readlines():
                 deduplicated_lines.append(line)
             g.writelines(deduplicated_lines)
 
-    
     return
