@@ -187,13 +187,23 @@ def write_to_fasttext_training_data(filepath_out, label_out, filepath_in_warc="c
                     break
 
 def train_fasttext_quality_filter(training_file, validation_file, output_file, ):
-    model = fasttext.train_supervised(input=training_file, epoch=10, lr=1)
+    # model = fasttext.train_supervised(input=training_file, epoch=10, lr=1)  # 2 GB file
+    model = fasttext.train_supervised(
+    input=training_file,
+    epoch=10,
+    lr=1,
+    dim=50,
+    wordNgrams=2,
+    bucket=200000,
+    minCount=5,
+    )
+    model.quantize(input=training_file, retrain=True)
     print(model.test(validation_file))
     model.save_model(output_file)
 
 if __name__ == "__main__":
-    #train_fasttext_quality_filter("cs336_data/data/training_shuffled.txt", "cs336_data/data/validation.txt", "cs336_data/classifiers/quality.bin")
-    write_to_fasttext_training_data("cs336_data/data/training_positive.txt", "__label__wiki","cs336_data/data/sampled_positive_urls.warc.warc.gz")
+    train_fasttext_quality_filter("cs336_data/data/training_shuffled2.txt", "cs336_data/data/validation2.txt", "cs336_data/classifiers/quality2.bin")
+    # write_to_fasttext_training_data("cs336_data/data/training_positive.txt", "__label__wiki","cs336_data/data/sampled_positive_urls.warc.warc.gz")
     # write_to_fasttext_training_data("cs336_data/data/training_negative.txt", "__label__cc", "cs336_data/data/CC_example.warc.gz")
     import sys
 
