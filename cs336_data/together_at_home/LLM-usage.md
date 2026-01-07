@@ -1,0 +1,2 @@
+For code within this folder I have used Claude to help me recreate the data that students would normally acces directly from together.ai.
+My excuse is that if this was considered a really usefull thing to learn, it would have been part of the assignment.
