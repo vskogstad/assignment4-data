@@ -1,4 +1,6 @@
+import json
 import random
+import time
 from pathlib import Path
 
 import fasttext
@@ -13,7 +15,7 @@ from resiliparse.parse.encoding import detect_encoding
 LANG_MODEL = fasttext.load_model("cs336_data/classifiers/lid.176.ftz")
 NSFW_MODEL = fasttext.load_model("cs336_data/classifiers/jigsaw_fasttext_bigrams_nsfw_final.bin")
 TOXIC_MODEL = fasttext.load_model("cs336_data/classifiers/jigsaw_fasttext_bigrams_hatespeech_final.bin")
-QUALITY_MODEL = fasttext.load_model("cs336_data/classifiers/quality.bin")
+QUALITY_MODEL = fasttext.load_model("cs336_data/classifiers/paloma.bin")
 
 
 def ensure_nltk_data():
@@ -23,7 +25,7 @@ def ensure_nltk_data():
         nltk.download("punkt_tab", quiet=True)
 
 
-ensure_nltk_data() # can't store this within folder structure, need to ensure it is downloaded if not found.
+ensure_nltk_data()  # can't store this within folder structure, need to ensure it is downloaded if not found.
 
 
 def extract_text(html_bytes):
@@ -36,7 +38,7 @@ def extract_text(html_bytes):
         try:
             text = html_bytes.decode(enc)
         except (UnicodeDecodeError, LookupError):
-            print("Trying to replace and force utf-8")
+            # print("Trying to replace and force utf-8")
             text = html_bytes.decode("utf-8", errors="replace")  # Last resort: force UTF-8 with replacement characters
     a = extract_plain_text(text)
     # print(f" {a =} ")
@@ -83,9 +85,13 @@ def classify_toxic_speech(text):
 
     return language[0].split("__label__")[1], float(score[0])
 
-def classify_quality(text):
+
+def classify_quality(text, model_path=None):
     # Identifies quality (similarity to page linked from wikipedia) using a pretrained fasttext classifier.
-    model = QUALITY_MODEL
+    if not model_path:
+        model = QUALITY_MODEL
+    else:
+        model = fasttext.load_model(model_path)
     text = " ".join(
         [sentence for sentence in text.split("\n")]
     )  # This is fine. Will give the classifier multiline text joined together. Same as what it's trained on.
@@ -95,31 +101,8 @@ def classify_quality(text):
     return language[0].split("__label__")[1], float(score[0])
 
 
-def gopher_quality_filter(text, include_alphabetic=True, blocked_content=False, remove_pdfs=False):
-    if remove_pdfs:
-        if text.startswith("%PDF"):
-            print("PDF removed")
-            return False, "PDF"
-        
-    if blocked_content:
-        if "page not found" in text[:50].lower():
-            print("page not found")
-            return False, "Page not found"
-        
-        if "error" in text[:50].lower():
-            print("Error")
-            return False, "Error"
-        
-        if "Cloudflare Ray ID" in text[-2000:]:
-            print("Cloudflare removed")
-            return False, "Cloudfare"
-    
-    if len(text) > 600000 or len(text) < 200:
-        print("Len blocked")
-        return False, "Num_words"        
-    
-    
-    words = text.split() #nltk.word_tokenize(text)
+def gopher_quality_filter(text, include_alphabetic=True):
+    words = text.split()  # nltk.word_tokenize(text)
 
     # Contain less than 50 or more than 100_000
     num_words = len(words)
@@ -158,53 +141,194 @@ def gopher_quality_filter(text, include_alphabetic=True, blocked_content=False, 
     return True, ""
 
 
-def write_to_fasttext_training_data(filepath_out, label_out, filepath_in_warc="cs336_data/data/CC_example.warc.gz", num_records=-1):
-    def min_content_filter(record, min_bytes=1000):
+def c4_filter(text, blocked_content=False, remove_pdfs=False):
+    if remove_pdfs:
+        if text.startswith("%PDF"):
+            return False, "PDF"
+
+    if blocked_content:
+        if "page not found" in text[:50].lower():
+            return False, "Page not found"
+
+        if "error" in text[:50].lower():
+            return False, "Error"
+
+        if "Cloudflare Ray ID" in text[-2000:]:
+            return False, "Cloudfare"
+
+    if len(text) > 600000 or len(text) < 200:
+        return False, "Num_words"
+
+    line_text = text.split("\n")
+    trimmed = []
+    for line in line_text:
+        if not line or line[-1] not in ['"', ".", "!", "?"]:
+            continue
+        words = line.split()
+        if len(words) < 5:
+            continue
+        trimmed.append(line)
+    return True, "\n".join(trimmed)
+
+
+def write_to_fasttext_training_data(
+    filepath_out, label_out, filepath_in_warc="cs336_data/data/CC_example.warc.gz", num_records=-1
+):
+    def min_content_filter(record, min_bytes=200):
         return has_block_digest(record) and record.content_length > min_bytes
 
     # TODO: check that file exits
 
     stream = GZipStream(FileStream(filepath_in_warc, "rb"))
     i = 0
+    reasons = {
+        "Too large": 0,
+        "Not english": 0,
+        "Num_words": 0,
+        "Word_length": 0,
+        "Ellipses": 0,
+        "Alphabetic": 0,
+        "PDF": 0,
+        "Page not found": 0,
+        "Error": 0,
+        "Cloudfare": 0,
+        "nsfw": 0,
+        "toxic": 0,
+    }
     with open(file=filepath_out, mode="w", encoding="utf-8") as f:
         for record in ArchiveIterator(stream, func_filter=min_content_filter):
             if record.content_length > 5_000_000:
                 continue
             bytes = record.reader.read()
-            text = extract_text(bytes)
+            text = bytes.decode("utf-8")  # extract_text(bytes)
             # Going through the pipeline step by step
-            if (
-                identify_language(text)[0] == "en"
-                and gopher_quality_filter(text, include_alphabetic=False, blocked_content=True, remove_pdfs=True)[0]
-                and classify_nsfw(text)[0] == "non-nsfw"
-                and classify_toxic_speech(text)[0] == "non-toxic"
-            ):
-                text = label_out + " " + " ".join(text.split()) + "\n"
-                f.write(text)
-                #print(record.record_id)
-                i += 1
-                if i == num_records: # if not specified , we will iterate over entire warc-file
-                    break
+            if identify_language(text)[0] == "en":
+                passing, text = c4_filter(text, True, True)
+                if not passing:
+                    reasons[text] += 1
+                    continue
+            else:
+                print("Not English")
+                continue
 
-def train_fasttext_quality_filter(training_file, validation_file, output_file, ):
+            passed_gopher, reason = gopher_quality_filter(text, include_alphabetic=True)
+            if not passed_gopher:
+                reasons[reason] += 1
+                continue
+            if not classify_nsfw(text)[0] == "non-nsfw":
+                reasons["nsfw"] += 1
+                continue
+            if not classify_toxic_speech(text)[0] == "non-toxic":
+                reasons["toxic"] += 1
+                continue
+            text = label_out + " " + " ".join(text.split("\n")) + "\n"
+            f.write(text)
+            # print(record.record_id)
+            i += 1
+            if i == num_records:  # if not specified , we will iterate over entire warc-file
+                break
+    print(reasons)
+
+
+def create_training_data(
+    filepath_in="cs336_data/data/CC_example.warc.gz", filepath_out="cs336_data/data/training_data.json", num_records=-1, warc=False
+):
+    def min_content_filter(record, min_bytes=1000):
+        return has_block_digest(record) and record.content_length > min_bytes
+
+    # TODO: check that file exits
+
+    stream = GZipStream(FileStream(filepath_in, "rb"))
+    i = 0
+    filtered = {
+        "Too large": 0,
+        "Not english": 0,
+        "Num_words": 0,
+        "Word_length": 0,
+        "Ellipses": 0,
+        "Alphabetic": 0,
+        "PDF": 0,
+        "Page not found": 0,
+        "Error": 0,
+        "Cloudfare": 0,
+        "nsfw": 0,
+        "toxic": 0,
+    }
+    with open(file=filepath_out, mode="w", encoding="utf-8") as f:
+        for record in ArchiveIterator(stream, func_filter=min_content_filter):
+            if record.content_length > 5_000_000:
+                filtered["Too large"] += 1
+                continue
+
+            bytes = record.reader.read()
+            if warc:
+                text = extract_text(bytes)
+            else:  # wet files, can decode directly
+                text = bytes.decode("utf-8")
+            # Going through the pipeline step by step
+            if identify_language(text)[0] == "en":
+                passing, text = c4_filter(text, True, True)
+                if not passing:
+                    filtered[text] += 1
+                    continue
+            else:
+                filtered["Not english"] += 1
+                continue
+
+            passed_gopher, reason = gopher_quality_filter(text, include_alphabetic=True)
+            if not passed_gopher:
+                filtered[reason] += 1
+                continue
+            if not classify_nsfw(text)[0] == "non-nsfw":
+                filtered["nsfw"] += 1
+                continue
+            if not classify_toxic_speech(text)[0] == "non-toxic":
+                filtered["toxic"] += 1
+                continue
+            # source, confidence = classify_quality(text)
+            # if source == "cc":
+
+            # text = label_out + str(confidence) + " " + " ".join(text.split("\n")) + "\n"
+            f.write(json.dumps(text) + "\n")
+            # print(record.record_id)
+            i += 1
+            if i == num_records:  # if not specified , we will iterate over entire warc-file
+                break
+    print(i, filtered)
+
+
+def train_fasttext_quality_filter(
+    training_file,
+    validation_file,
+    output_file,
+):
     # model = fasttext.train_supervised(input=training_file, epoch=10, lr=1)  # 2 GB file
     model = fasttext.train_supervised(
-    input=training_file,
-    epoch=10,
-    lr=1,
-    dim=100,
-    wordNgrams=2,
-    bucket=2000000,
-    minCount=5,
+        input=training_file,
+        epoch=10,
+        lr=1,
+        dim=100,
+        wordNgrams=2,
+        bucket=2_000_000,
+        minCount=5,
     )
     model.quantize(input=training_file, retrain=True)
     print(model.test(validation_file))
     model.save_model(output_file)
 
+
 if __name__ == "__main__":
-    train_fasttext_quality_filter("cs336_data/data/training_shuffled2.txt", "cs336_data/data/validation2.txt", "cs336_data/classifiers/quality3.bin")
-    # write_to_fasttext_training_data("cs336_data/data/training_positive.txt", "__label__wiki","cs336_data/data/sampled_positive_urls.warc.warc.gz")
-    # write_to_fasttext_training_data("cs336_data/data/training_negative.txt", "__label__cc", "cs336_data/data/CC_example.warc.gz")
+    """train_fasttext_quality_filter(
+        "cs336_data/data/paloma_shuffled.txt", "cs336_data/data/paloma_val.txt", "cs336_data/classifiers/paloma.bin"
+    )"""
+    # write_to_fasttext_training_data("cs336_data/data/training_positive4.txt", "__label__wiki","cs336_data/data/sampled_positive_urls.warc.warc.gz")
+    # write_to_fasttext_training_data("cs336_data/data/training_negative2.txt", "__label__cc", "cs336_data/data/CC_example.warc.gz")
+    t0 = time.time()
+    create_training_data(
+        "cs336_data/data/CC-MAIN-20250417135010-20250417165010-00065.warc.wet.gz",
+        "cs336_data/data/training2.json",
+    )
+    print(time.time() - t0)
     import sys
 
     sys.exit()

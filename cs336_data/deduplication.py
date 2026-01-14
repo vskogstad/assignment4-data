@@ -100,7 +100,7 @@ def min_hash_deduplication(filepaths, num_hashes, num_bands, ngrams, jaccard_thr
     for file in deduplicated:
         # print(file)
         outfile = Path(output_dir) / Path(file).name
-        with open(file) as f, open(outfile, "w") as g:  # not clean, but should work.
+        with open(file) as f, open(outfile, "w") as g:  
             g.write(f.read())
 
     return

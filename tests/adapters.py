@@ -49,7 +49,7 @@ def run_classify_toxic_speech(text: str) -> tuple[Any, float]:
 def run_classify_quality(text: str) -> tuple[Any, float]:
     from cs336_data.classifiers import classify_quality
 
-    return classify_quality(text)
+    return classify_quality(text, "cs336_data/classifiers/quality.bin")
 
 
 def run_gopher_quality_filter(text: str) -> bool:
