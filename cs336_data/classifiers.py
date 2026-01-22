@@ -238,7 +238,7 @@ def create_training_data(
 
     # TODO: check that file exits
 
-    stream = GZipStream(FileStream(filepath_in, "rb"))
+    stream = GZipStream(FileStream(str(filepath_in), "rb"))
     i = 0
     filtered = {
         "Too large": 0,
