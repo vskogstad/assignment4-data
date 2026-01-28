@@ -1,33 +1,33 @@
+import concurrent.futures
 import multiprocessing
+import os
+import shutil
 import time
+from pathlib import Path
 
 import numpy as np
+from classifiers import create_training_data
+from tqdm import tqdm
+from transformers import AutoTokenizer
 
 t0 = time.time()
 data = np.fromfile("cs336_data/data/tokenized/tokenized_paloma_c4_100_domains_validation.bin", dtype=np.uint16)
 
-from transformers import AutoTokenizer
-
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
-# print(tokenizer.decode(data[0:2500]))
-"""data2 = np.fromfile("cs336_data/data/tokenized/train.bin", dtype=np.uint16)
-print(tokenizer.decode(data2[:4400]))
-import sys
-
-sys.exit()"""
-import concurrent.futures
-import os
-from pathlib import Path
-
-from classifiers import create_training_data
-from tqdm import tqdm
 
 # Set up all folder paths
 wet_dir = Path.cwd() / Path("cs336_data/data/wet_files")
 filtered_dir = Path.cwd() / Path("cs336_data/data/filtered")
+exact_deduplicated_dir = Path.cwd() / Path("cs336_data/data/exact_deduplicated")
 deduplicated_dir = Path.cwd() / Path("cs336_data/data/deduplicated")
 tagged_dir = Path.cwd() / Path("cs336_data/data/tagged")
 tokenized_dir = Path.cwd() / Path("cs336_data/data/tokenized")
+
+# Clear directories at pipeline start
+for dir in [filtered_dir, exact_deduplicated_dir, deduplicated_dir, tagged_dir, tokenized_dir]:
+    if dir.exists():
+        shutil.rmtree(dir)
+    dir.mkdir(parents=True, exist_ok=True)
 
 
 def process_single_wet_file(input_path: str, output_path: str):
@@ -60,11 +60,22 @@ with concurrent.futures.ProcessPoolExecutor(max_workers=num_cpus) as executor:
 
 
 # 2 run deduplication. Exact first then fuzzy.
-from deduplication import exact_deduplication
+from deduplication import exact_deduplication, min_hash_deduplication_multiline
 
-# only exact deduplication for now to keep number of folders down a bit.
+# exact deduplication
 filtered_filepaths = list(filtered_dir.glob("*.wet.gz"))
-exact_deduplication(filtered_filepaths, deduplicated_dir)
+exact_deduplication(filtered_filepaths, exact_deduplicated_dir)
+
+# fuzzy deduplication
+exact_deduplicated_filepaths = list(exact_deduplicated_dir.glob("*.wet.gz"))
+min_hash_deduplication_multiline(
+    filepaths=exact_deduplicated_filepaths,
+    num_hashes=50,
+    num_bands=5,
+    ngrams=3,
+    similarity_treshold=0.8,
+    output_dir=deduplicated_dir,
+)
 
 
 # 3 Run quality score in parallel on a per line basis. add classification to each json line.
@@ -114,30 +125,7 @@ def tokenize_and_add_eos(line):
     return result * num_copies
 
 
-"""
-results = []
-num_repeats = 2
-training_data = tokenized_dir / "train.bin"
-tagged_filepaths = list(tagged_dir.glob("*wet.gz"))
-
-
-for filepath in tagged_filepaths:
-    with open(filepath) as f:
-        json_file = f.readlines()
-    for line in json_file:
-        tag, text = line.split("\t", 1)
-        num_copies = 1
-        if tag == "paloma":
-            num_copies = num_repeats
-        result = tokenize_and_add_eos(text) * num_copies
-        results.append(result)
-        # Flatten the list of ids and convert to numpy array
-all_ids = [token_id for sublist in results for token_id in sublist]
-print(f"Tokenized and encoded {wet_filepath} into {len(all_ids)} tokens")
-ids_array = np.array(all_ids, dtype=np.uint16)
-ids_array.tofile(training_data)"""
-num_repeats = 2
-training_data = tokenized_dir / "train2.bin"
+training_data = tokenized_dir / "train3.bin"
 tagged_filepaths = list(tagged_dir.glob("*wet.gz"))
 
 
@@ -157,12 +145,13 @@ for filepath in tagged_filepaths:
 pool.close()
 pool.join()
 # Flatten the list of ids and convert to numpy array
-#all_ids = [token_id for sublist in results for token_id in sublist]
+# all_ids = [token_id for sublist in results for token_id in sublist]
 print(f"Tokenized and encoded {tagged_dir} into some tokens")
 """ids_array = np.array(all_ids, dtype=np.uint16)
 ids_array.tofile(training_data)"""
 
-data2 = np.fromfile("cs336_data/data/tokenized/train.bin", dtype=np.uint16)
-print(tokenizer.decode(data2[:1400]))
+data2 = np.fromfile(training_data, dtype=np.uint16)
+print(len(data2), "number of tokens")
+print(tokenizer.decode(data2[:100]))
 t2 = time.time()
 print(f"during tokenization: {t2 - t1}")
