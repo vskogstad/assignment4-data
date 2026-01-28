@@ -188,7 +188,6 @@ def min_hash_deduplication_multiline(filepaths, num_hashes, num_bands, ngrams, s
     # Pick earliest file from each cluster. "should" be using random, but this is more reproducible
     deduplicated = [min(v) for k, v in clusters.items()]  # random.choice(list(v)) for k, v...
     surviving_ids = set(deduplicated)
-    print(f"This is the {surviving_ids = } ")
     for file in filepaths:
         # print(file)
         outfile = Path(output_dir) / Path(file).name

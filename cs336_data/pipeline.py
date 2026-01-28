@@ -11,7 +11,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer
 
 t0 = time.time()
-data = np.fromfile("cs336_data/data/tokenized/tokenized_paloma_c4_100_domains_validation.bin", dtype=np.uint16)
+data = np.fromfile("cs336_data/data/paloma/tokenized_paloma_c4_100_domains_validation.bin", dtype=np.uint16)
 
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
