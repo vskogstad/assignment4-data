@@ -59,8 +59,8 @@ with concurrent.futures.ProcessPoolExecutor(max_workers=num_cpus) as executor:
         print(f"Output file written: {output_file}")
 t1 = time.time()
 
-# 2 run deduplication. 
-from deduplication import exact_deduplication #, min_hash_deduplication_multiline
+# 2 run deduplication.
+from deduplication import exact_deduplication  # , min_hash_deduplication_multiline
 
 # exact deduplication
 filtered_filepaths = list(filtered_dir.glob("*.wet.gz"))
@@ -72,6 +72,7 @@ t2 = time.time()
 def write_fuzzy_deduplication(filepaths, buckets, parent, similarity_treshold, output_dir):
     from collections import defaultdict
     from pathlib import Path
+
     def union(a, b):
         # joins two sets at their root
         root_a, root_b = find(a), find(b)
@@ -146,7 +147,7 @@ def bucketize_single_file(file, num_hashes, num_bands, ngrams):
             )  # builds the ngrams, will fail for documents with num_words < ngrams.
             # doc_ngram_sets[(file, line_num)] = doc_ngrams
             # print(file_ngrams[:3])
-            signature = [float('inf')] * num_hashes
+            signature = [float("inf")] * num_hashes
             for ngram in doc_ngrams:
                 for k in range(num_hashes):
                     h = mmh3.hash(ngram, seed=k)
@@ -162,6 +163,7 @@ def bucketize_single_file(file, num_hashes, num_bands, ngrams):
                 temp.append(((file, line_num), signature))  # adding location and full signature to the bucket.
                 buckets[j][sig_band] = temp
         return parent, buckets
+
 
 # Set up the executor
 num_cpus = len(os.sched_getaffinity(0))
@@ -182,7 +184,7 @@ with concurrent.futures.ProcessPoolExecutor(max_workers=num_cpus) as executor:
     for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
         file_parent, file_buckets = future.result()
         all_parent.update(file_parent)
-        # merge buckets per band...
+        # merge buckets per band
         for i in range(num_bands):
             for k, v in file_buckets[i].items():
                 temp = all_buckets[i].get(k, [])
@@ -190,7 +192,9 @@ with concurrent.futures.ProcessPoolExecutor(max_workers=num_cpus) as executor:
                 all_buckets[i][k] = temp
 
 
-write_fuzzy_deduplication(exact_deduplicated_filepaths, all_buckets, all_parent, similarity_treshold=0.8, output_dir=deduplicated_dir)
+write_fuzzy_deduplication(
+    exact_deduplicated_filepaths, all_buckets, all_parent, similarity_treshold=0.8, output_dir=deduplicated_dir
+)
 
 t3 = time.time()
 
@@ -203,7 +207,8 @@ def score_single_file(input_filepath, output_filepath):
     with open(input_filepath) as f, open(output_filepath, "a") as g:
         for line in f.readlines():
             label, score = classify_quality(line)
-            g.write(label + "\t" + line)
+            if label == "paloma":
+                g.write(label + "\t" + line)
     return output_filepath
 
 
@@ -237,7 +242,7 @@ def tokenize_and_add_eos(line):
     num_copies = 1
     tag, text = line.split("\t", 1)
     if tag == "paloma":
-        num_copies = 2
+        num_copies = 1
     result = tokenizer.encode(text) + [tokenizer.eos_token_id]
     return result * num_copies
 
