@@ -57,7 +57,7 @@ with concurrent.futures.ProcessPoolExecutor(max_workers=num_cpus) as executor:
     ):
         output_file = future.result()
         print(f"Output file written: {output_file}")
-
+t1 = time.time()
 
 # 2 run deduplication. Exact first then fuzzy.
 from deduplication import exact_deduplication, min_hash_deduplication_multiline
@@ -65,18 +65,18 @@ from deduplication import exact_deduplication, min_hash_deduplication_multiline
 # exact deduplication
 filtered_filepaths = list(filtered_dir.glob("*.wet.gz"))
 exact_deduplication(filtered_filepaths, exact_deduplicated_dir)
-
+t2 = time.time()
 # fuzzy deduplication
 exact_deduplicated_filepaths = list(exact_deduplicated_dir.glob("*.wet.gz"))
 min_hash_deduplication_multiline(
     filepaths=exact_deduplicated_filepaths,
-    num_hashes=50,
+    num_hashes=25,
     num_bands=5,
     ngrams=3,
     similarity_treshold=0.8,
     output_dir=deduplicated_dir,
 )
-
+t3 = time.time()
 
 # 3 Run quality score in parallel on a per line basis. add classification to each json line.
 from classifiers import classify_quality
@@ -111,8 +111,8 @@ with concurrent.futures.ProcessPoolExecutor(max_workers=num_cpus) as executor:
         output_file = future.result()
         print(f"Output file written: {output_file}")
 
-t1 = time.time()
-print(f"before tokenization: {t1 - t0}")
+t4 = time.time()
+# print(f"before tokenization: {t4 - t0}")
 
 
 # 4 Upweigh and tokenize final training set
@@ -153,5 +153,10 @@ ids_array.tofile(training_data)"""
 data2 = np.fromfile(training_data, dtype=np.uint16)
 print(len(data2), "number of tokens")
 print(tokenizer.decode(data2[:100]))
-t2 = time.time()
-print(f"during tokenization: {t2 - t1}")
+t5 = time.time()
+print(f"Total time: {t5 - t0}")
+print(f"Filtering: {t1 - t0}")
+print(f"Exact deduplication: {t2 - t1}")
+print(f"Fuzzy deduplication: {t3 - t2}")
+print(f"Quality classification: {t4 - t3}")
+print(f"tokenization: {t5 - t4}")

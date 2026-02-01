@@ -140,12 +140,12 @@ def min_hash_deduplication_multiline(filepaths, num_hashes, num_bands, ngrams, s
     random.seed(45)
     parent = {}
     buckets = [{} for _ in range(num_bands)]
+    translator = str.maketrans("", "", string.punctuation)  # Remove punctation
 
     for file in filepaths:
         with open(file) as f:
             for line_num, line in enumerate(f):
                 parent[(file, line_num)] = (file, line_num)
-                translator = str.maketrans("", "", string.punctuation)  # Remove punctation
                 clean_text = line.translate(translator).lower()
                 normalized_text = unicodedata.normalize("NFD", clean_text)
                 word_list = normalized_text.split()
@@ -154,11 +154,12 @@ def min_hash_deduplication_multiline(filepaths, num_hashes, num_bands, ngrams, s
                 )  # builds the ngrams, will fail for documents with num_words < ngrams.
                 # doc_ngram_sets[(file, line_num)] = doc_ngrams
                 # print(file_ngrams[:3])
-                signature = []
-                for k in range(num_hashes):
-                    signature.append(
-                        min([mmh3.hash(ngram, seed=k) for ngram in doc_ngrams])
-                    )  # using mmh3 to get a distinct hash function for each k.
+                signature = [float('inf')] * num_hashes
+                for ngram in doc_ngrams:
+                    for k in range(num_hashes):
+                        h = mmh3.hash(ngram, seed=k)
+                        if h < signature[k]:
+                            signature[k] = h
 
                 # split signature into bands:
                 r = num_hashes // num_bands
@@ -168,8 +169,9 @@ def min_hash_deduplication_multiline(filepaths, num_hashes, num_bands, ngrams, s
                     temp = buckets[j].get(sig_band, [])
                     temp.append(((file, line_num), signature))  # adding location and full signature to the bucket.
                     buckets[j][sig_band] = temp
-
+    
     for bucket in buckets:
+        print(len(bucket))
         for candidates in bucket.values():
             num_bucket_hashes = len(candidates)
             if num_bucket_hashes > 1:
