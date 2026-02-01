@@ -59,24 +59,141 @@ with concurrent.futures.ProcessPoolExecutor(max_workers=num_cpus) as executor:
         print(f"Output file written: {output_file}")
 t1 = time.time()
 
-# 2 run deduplication. Exact first then fuzzy.
-from deduplication import exact_deduplication, min_hash_deduplication_multiline
+# 2 run deduplication. 
+from deduplication import exact_deduplication #, min_hash_deduplication_multiline
 
 # exact deduplication
 filtered_filepaths = list(filtered_dir.glob("*.wet.gz"))
 exact_deduplication(filtered_filepaths, exact_deduplicated_dir)
 t2 = time.time()
-# fuzzy deduplication
-exact_deduplicated_filepaths = list(exact_deduplicated_dir.glob("*.wet.gz"))
-min_hash_deduplication_multiline(
-    filepaths=exact_deduplicated_filepaths,
-    num_hashes=25,
-    num_bands=5,
-    ngrams=3,
-    similarity_treshold=0.8,
-    output_dir=deduplicated_dir,
-)
+
+
+# 2.5 run fuzzy deduplication
+def write_fuzzy_deduplication(filepaths, buckets, parent, similarity_treshold, output_dir):
+    from collections import defaultdict
+    from pathlib import Path
+    def union(a, b):
+        # joins two sets at their root
+        root_a, root_b = find(a), find(b)
+        parent[root_a] = root_b
+
+    def find(x):
+        # finds root parent recursively
+        if parent[x] != x:
+            parent[x] = find(parent[x])
+        return parent[x]
+
+    def signature_similarity(sig1, sig2):
+        matches = sum(a == b for a, b in zip(sig1, sig2))
+        return matches / len(sig1)
+
+    for bucket in buckets:
+        print(len(bucket))
+        for candidates in bucket.values():
+            num_bucket_hashes = len(candidates)
+            if num_bucket_hashes > 1:
+                # print(f"checking full hash similarity for {num_bucket_hashes} documents, among those {hashes[0]}, {hashes[1]}")
+                for i in range(num_bucket_hashes - 1):
+                    id_i, sig_i = candidates[i]
+                    for j in range(i + 1, num_bucket_hashes):
+                        id_j, sig_j = candidates[j]
+                        if signature_similarity(sig_i, sig_j) > similarity_treshold:
+                            union(id_i, id_j)
+
+    clusters = defaultdict(set)  # merge across clusters to single parent file
+    for doc_id in parent.keys():
+        clusters[find(doc_id)].add(doc_id)
+    # print(clusters)
+    # Pick earliest file from each cluster. "should" be using random, but this is more reproducible
+    deduplicated = [min(v) for k, v in clusters.items()]  # random.choice(list(v)) for k, v...
+    surviving_ids = set(deduplicated)
+    for file in filepaths:
+        # print(file)
+        outfile = Path(output_dir) / Path(file).name
+        with open(file) as f, open(outfile, "w") as g:
+            for line_num, line in enumerate(f):
+                if (file, line_num) in surviving_ids:
+                    g.write(line)
+                """else:
+                    print(line[:200])
+                    print("---")"""
+
+
+def bucketize_single_file(file, num_hashes, num_bands, ngrams):
+    """
+    Variant of min_hash_deduplication that works on files containing a document per line. To avoid ram issues,
+    this does not calculate the jaccardian instead using just the full minhash signature.
+
+    """
+    import string
+    import unicodedata
+
+    import mmh3
+
+    # min hash algorithm with bucketing and lsh
+    parent = {}
+    buckets = [{} for _ in range(num_bands)]
+    translator = str.maketrans("", "", string.punctuation)  # Remove punctation
+
+    with open(file) as f:
+        for line_num, line in enumerate(f):
+            parent[(file, line_num)] = (file, line_num)
+            clean_text = line.translate(translator).lower()
+            normalized_text = unicodedata.normalize("NFD", clean_text)
+            word_list = normalized_text.split()
+            doc_ngrams = set(
+                " ".join(a) for a in zip(*[word_list[i:] for i in range(ngrams)])
+            )  # builds the ngrams, will fail for documents with num_words < ngrams.
+            # doc_ngram_sets[(file, line_num)] = doc_ngrams
+            # print(file_ngrams[:3])
+            signature = [float('inf')] * num_hashes
+            for ngram in doc_ngrams:
+                for k in range(num_hashes):
+                    h = mmh3.hash(ngram, seed=k)
+                    if h < signature[k]:
+                        signature[k] = h
+
+            # split signature into bands:
+            r = num_hashes // num_bands
+            for j in range(num_bands):
+                sig_band = hash(tuple(signature[j * r : (j + 1) * r]))
+                # store signature
+                temp = buckets[j].get(sig_band, [])
+                temp.append(((file, line_num), signature))  # adding location and full signature to the bucket.
+                buckets[j][sig_band] = temp
+        return parent, buckets
+
+# Set up the executor
+num_cpus = len(os.sched_getaffinity(0))
+num_hashes = 25
+num_bands = 5
+ngrams = 3
+with concurrent.futures.ProcessPoolExecutor(max_workers=num_cpus) as executor:
+    exact_deduplicated_filepaths = list(exact_deduplicated_dir.glob("*wet.gz"))
+
+    futures = []
+    for filepath in exact_deduplicated_filepaths:
+        future = executor.submit(bucketize_single_file, filepath, num_hashes, num_bands, ngrams)
+        futures.append(future)
+
+    # Collect results
+    all_parent = {}
+    all_buckets = [{} for _ in range(num_bands)]  # num_bands
+    for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
+        file_parent, file_buckets = future.result()
+        all_parent.update(file_parent)
+        # merge buckets per band...
+        for i in range(num_bands):
+            for k, v in file_buckets[i].items():
+                temp = all_buckets[i].get(k, [])
+                temp.extend(v)
+                all_buckets[i][k] = temp
+
+
+write_fuzzy_deduplication(exact_deduplicated_filepaths, all_buckets, all_parent, similarity_treshold=0.8, output_dir=deduplicated_dir)
+
 t3 = time.time()
+
 
 # 3 Run quality score in parallel on a per line basis. add classification to each json line.
 from classifiers import classify_quality
