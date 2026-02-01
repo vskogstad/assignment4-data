@@ -10,6 +10,8 @@ from classifiers import create_training_data
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
+
+
 t0 = time.time()
 data = np.fromfile("cs336_data/data/paloma/tokenized_paloma_c4_100_domains_validation.bin", dtype=np.uint16)
 
@@ -23,11 +25,61 @@ deduplicated_dir = Path.cwd() / Path("cs336_data/data/deduplicated")
 tagged_dir = Path.cwd() / Path("cs336_data/data/tagged")
 tokenized_dir = Path.cwd() / Path("cs336_data/data/tokenized")
 
+
 # Clear directories at pipeline start
 for dir in [filtered_dir, exact_deduplicated_dir, deduplicated_dir, tagged_dir, tokenized_dir]:
     if dir.exists():
         shutil.rmtree(dir)
     dir.mkdir(parents=True, exist_ok=True)
+
+import urllib.request
+from pathlib import Path
+
+
+def download_single_file(url, output_dir):
+    """Download a single WET file from Common Crawl."""
+    filename = url.strip().split("/")[-1]
+    output_path = Path(output_dir) / filename
+    if output_path.exists():
+        return output_path  # skip already downloaded
+    urllib.request.urlretrieve(url.strip(), output_path)
+    return output_path
+
+
+def download_wet_files(url_file, output_dir, max_workers=4):
+    """
+    Download WET files listed in a text file.
+    url_file: path to .txt with one URL per line, e.g.:
+        https://data.commoncrawl.org/crawl-data/CC-MAIN-2025-18/segments/.../wet/CC-MAIN-...-00999.warc.wet.gz
+    """
+    import concurrent.futures
+
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    with open(url_file) as f:
+        urls = [line.strip() for line in f if line.strip()]
+
+    print(f"Downloading {len(urls)} WET files to {output_dir}")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(download_single_file, url, output_dir): url
+            for url in urls
+        }
+        for future in tqdm(
+            concurrent.futures.as_completed(futures),
+            total=len(urls),
+            desc="Downloading",
+        ):
+            try:
+                path = future.result()
+                print(f"Downloaded: {path.name}")
+            except Exception as e:
+                url = futures[future]
+                print(f"Failed: {url} - {e}")
+
+#download_wet_files("cs336_data/wet_urls_5000.txt", wet_dir, max_workers=8)
+
 
 
 def process_single_wet_file(input_path: str, output_path: str):
