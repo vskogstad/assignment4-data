@@ -2,7 +2,13 @@
 Train a language model on one or multiple GPUs.
 
 Default config is `experiment/your_data`, which will train on your GPT-2 tokenized dataset and validate on `tokenized_paloma_c4_100_domains_validation.bin`.
+"""
+Train a language model on one or multiple GPUs.
 
+Default config is `experiment/your_data`, which will train on your GPT-2 tokenized dataset and validate on `tokenized_paloma_c4_100_domains_validation.bin`.
+
+To ready the config for your run, you should:
+1. open the config file at `cs3
 To ready the config for your run, you should:
 1. open the config file at `cs336-basics/configs/experiment/your_data.yaml` and set the `paths.train_bin` attribute to point to the file containing your tokenized training data.
 2. You should also set an appropriate `training.wandb_entity` and `training.wandb_project` attribute for logging.
