@@ -289,7 +289,7 @@ def create_training_data(
             # if source == "cc":
 
             # text = label_out + str(confidence) + " " + " ".join(text.split("\n")) + "\n"
-            f.write(json.dumps(text) + "\n")
+            f.write(text + "\n")
             # print(record.record_id)
             i += 1
             if i == num_records:  # if not specified , we will iterate over entire warc-file
