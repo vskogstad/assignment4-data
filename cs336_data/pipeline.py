@@ -13,7 +13,7 @@ from transformers import AutoTokenizer
 
 
 t0 = time.time()
-data = np.fromfile("cs336_data/data/paloma/tokenized_paloma_c4_100_domains_validation.bin", dtype=np.uint16)
+#data = np.fromfile("cs336_data/data/paloma/tokenized_paloma_c4_100_domains_validation.bin", dtype=np.uint16)
 
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
@@ -78,7 +78,7 @@ def download_wet_files(url_file, output_dir, max_workers=4):
                 url = futures[future]
                 print(f"Failed: {url} - {e}")
 
-#download_wet_files("cs336_data/wet_urls_5000.txt", wet_dir, max_workers=8)
+#download_wet_files("cs336_data/wet_urls_8.txt", wet_dir, max_workers=8)
 
 
 
