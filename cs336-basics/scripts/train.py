@@ -2,10 +2,6 @@
 Train a language model on one or multiple GPUs.
 
 Default config is `experiment/your_data`, which will train on your GPT-2 tokenized dataset and validate on `tokenized_paloma_c4_100_domains_validation.bin`.
-"""
-Train a language model on one or multiple GPUs.
-
-Default config is `experiment/your_data`, which will train on your GPT-2 tokenized dataset and validate on `tokenized_paloma_c4_100_domains_validation.bin`.
 
 To ready the config for your run, you should:
 1. open the config file at `cs3
