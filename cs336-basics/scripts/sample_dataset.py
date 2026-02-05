@@ -4,9 +4,7 @@ import numpy as np
 
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
 print("Training data:")
-data2 = np.fromfile("data/train96.bin", dtype=np.uint16)
-print(tokenizer.decode(data2[:16]))
-print(data2[:16])
+data2 = np.fromfile("data/train96b.bin", dtype=np.uint16)
 print(tokenizer.decode(data2[:100]))
 print("\n______________________________________________________________________________________________\n\n\n\nValidation data:")
 
