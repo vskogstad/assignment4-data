@@ -266,7 +266,7 @@ def create_training_data(
             else:  # wet files, can decode directly
                 text = bytes.decode("utf-8")
             # Going through the pipeline step by step
-            if identify_language(text)[0] == "en":
+            if identify_language(text)[0] == "en" and identify_language(text)[1] >= 0.75:
                 passing, text = c4_filter(text, True, True)
                 if not passing:
                     filtered[text] += 1
@@ -289,7 +289,7 @@ def create_training_data(
             # if source == "cc":
 
             # text = label_out + str(confidence) + " " + " ".join(text.split("\n")) + "\n"
-            f.write(text + "\n")
+            f.write(json.dumps(text) + "\n")
             # print(record.record_id)
             i += 1
             if i == num_records:  # if not specified , we will iterate over entire warc-file

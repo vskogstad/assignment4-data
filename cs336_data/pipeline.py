@@ -1,4 +1,5 @@
 import concurrent.futures
+import json
 import multiprocessing
 import os
 import shutil
@@ -258,7 +259,8 @@ from classifiers import classify_quality
 def score_single_file(input_filepath, output_filepath):
     with open(input_filepath) as f, open(output_filepath, "a") as g:
         for line in f.readlines():
-            label, score = classify_quality(line)
+            text = json.loads(line)
+            label, score = classify_quality(text)
             if label == "paloma":
                 g.write(label + "\t" + line)
     return output_filepath
@@ -292,7 +294,8 @@ t4 = time.time()
 # 4 Upweigh and tokenize final training set
 def tokenize_and_add_eos(line):
     num_copies = 1
-    tag, text = line.split("\t", 1)
+    tag, doc = line.split("\t", 1)
+    text = json.loads(doc)
     if tag == "paloma":
         num_copies = 1
     result = tokenizer.encode(text) + [tokenizer.eos_token_id]
