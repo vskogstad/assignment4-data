@@ -113,11 +113,11 @@ with concurrent.futures.ProcessPoolExecutor(max_workers=num_cpus) as executor:
 t1 = time.time()
 
 # 2 run deduplication.
-from deduplication import exact_deduplication  # , min_hash_deduplication_multiline
+from deduplication import exact_line_deduplication  # , min_hash_deduplication_multiline
 
 # exact deduplication
 filtered_filepaths = list(filtered_dir.glob("*.wet.gz"))
-exact_deduplication(filtered_filepaths, exact_deduplicated_dir)
+exact_line_deduplication(filtered_filepaths, exact_deduplicated_dir)
 t2 = time.time()
 
 

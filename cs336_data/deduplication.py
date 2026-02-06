@@ -1,3 +1,4 @@
+import json
 import random
 import string
 import unicodedata
@@ -24,6 +25,30 @@ def exact_deduplication(filepaths, output_directory):
                 key = hash(line)
                 if counts[key] == 1:
                     g.writelines(line)
+
+
+def exact_line_deduplication(filepaths, output_directory):
+    # count unique lines
+    counts = {}
+    for file in filepaths:
+        with open(file) as f:
+            for doc in f.readlines():
+                for line in json.loads(doc).split("\n"):
+                    counts[line] = counts.get(line, 0) + 1
+
+    # create new files with only unique lines
+    for file in filepaths:
+        outfile = Path(output_directory) / Path(file).name
+        with open(file) as f, open(outfile, "w") as g:
+            for doc in f.readlines():
+                doc_lines = []
+                for line in json.loads(doc).split("\n"):
+                    if counts[line] == 1:
+                        doc_lines.append(line)
+                line = "\n".join(doc_lines)
+                doc_lines = []
+                if len(line) > 50:
+                    g.writelines(json.dumps(line) + "\n")
 
 
 def min_hash_deduplication(
@@ -154,7 +179,7 @@ def min_hash_deduplication_multiline(filepaths, num_hashes, num_bands, ngrams, s
                 )  # builds the ngrams, will fail for documents with num_words < ngrams.
                 # doc_ngram_sets[(file, line_num)] = doc_ngrams
                 # print(file_ngrams[:3])
-                signature = [float('inf')] * num_hashes
+                signature = [float("inf")] * num_hashes
                 for ngram in doc_ngrams:
                     for k in range(num_hashes):
                         h = mmh3.hash(ngram, seed=k)
@@ -169,7 +194,7 @@ def min_hash_deduplication_multiline(filepaths, num_hashes, num_bands, ngrams, s
                     temp = buckets[j].get(sig_band, [])
                     temp.append(((file, line_num), signature))  # adding location and full signature to the bucket.
                     buckets[j][sig_band] = temp
-    
+
     for bucket in buckets:
         print(len(bucket))
         for candidates in bucket.values():
