@@ -317,21 +317,34 @@ def train_fasttext_quality_filter(
     model.save_model(output_file)
 
 
+def label_single_file(input_filepath, output_filepath, label):
+    with open(input_filepath) as f, open(output_filepath, "a") as g:
+        for line in f.readlines():
+            g.write(label + " " + text)
+    return output_filepath
+
 if __name__ == "__main__":
-    """train_fasttext_quality_filter(
-        "cs336_data/data/paloma_shuffled.txt", "cs336_data/data/paloma_val.txt", "cs336_data/classifiers/paloma.bin"
-    )"""
+    train_fasttext_quality_filter(
+        "cs336_data/data/paloma_train.txt", "cs336_data/data/paloma_val.txt", "cs336_data/classifiers/paloma.bin"
+    )
+    """
     # write_to_fasttext_training_data("cs336_data/data/training_positive4.txt", "__label__wiki","cs336_data/data/sampled_positive_urls.warc.warc.gz")
-    # write_to_fasttext_training_data("cs336_data/data/training_negative2.txt", "__label__cc", "cs336_data/data/CC_example.warc.gz")
+    with open('cs336_data/together_at_home/paloma/paloma_c4_100_domains_val.jsonl') as f, open("paloma.txt", "w") as g:
+        for line in f:
+            item = json.loads(line)
+            g.write("__label__paloma " + json.dumps(item["text"]) + "\n")
+    label_single_file("cs336_data/data/neg.txt", "cs336_data/data/negative.txt","label__cc")
+    """
+    import sys
+
+    sys.exit()
     t0 = time.time()
     create_training_data(
         "cs336_data/data/CC-MAIN-20250417135010-20250417165010-00065.warc.wet.gz",
         "cs336_data/data/training2.json",
     )
     print(time.time() - t0)
-    import sys
-
-    sys.exit()
+    
     random.seed(45)
     stream = GZipStream(FileStream("cs336_data/data/CC_example.warc.gz", "rb"))
     i = 0

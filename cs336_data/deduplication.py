@@ -47,7 +47,7 @@ def exact_line_deduplication(filepaths, output_directory):
                         doc_lines.append(line)
                 line = "\n".join(doc_lines)
                 doc_lines = []
-                if len(line) > 50:
+                if len(line) > 50*6:
                     g.writelines(json.dumps(line) + "\n")
 
 

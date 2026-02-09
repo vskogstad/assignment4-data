@@ -259,10 +259,12 @@ from classifiers import classify_quality
 def score_single_file(input_filepath, output_filepath):
     with open(input_filepath) as f, open(output_filepath, "a") as g:
         for line in f.readlines():
-            text = json.loads(line)
+            text = line.strip() # classifier trained on json.string. .strip() removes final \n to align with classifier.
             label, score = classify_quality(text)
             if label == "paloma":
                 g.write(label + "\t" + line)
+                #if score > 0.85:
+                #    print(line)
     return output_filepath
 
 
