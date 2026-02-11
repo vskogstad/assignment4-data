@@ -1,5 +1,6 @@
 import json
 import random
+import re
 import time
 from pathlib import Path
 
@@ -92,11 +93,7 @@ def classify_quality(text, model_path=None):
         model = QUALITY_MODEL
     else:
         model = fasttext.load_model(model_path)
-    text = " ".join(
-        [sentence for sentence in text.split("\n")]
-    )  # This is fine. Will give the classifier multiline text joined together. Same as what it's trained on.
-
-    language, score = model.predict(text)
+    language, score = model.predict(fasttext_normalize_text(text))
 
     return language[0].split("__label__")[1], float(score[0])
 
@@ -297,6 +294,15 @@ def create_training_data(
     print(i, filtered)
 
 
+
+
+def fasttext_normalize_text(text):
+    # Trying to normalize in the same way as datology.ai does when comparing agains luxical embeddings.
+    text = re.sub(r"\r?\n", f" {'<NEW_LINE>'} ", text)
+    text = re.sub(r"\s+", " ", text)
+    text = text.strip().lower()
+    return text
+
 def train_fasttext_quality_filter(
     training_file,
     validation_file,
@@ -318,7 +324,7 @@ def train_fasttext_quality_filter(
     print(model.test(validation_file))
     #model.quantize(input=training_file, retrain=True)
     #print(model.test(validation_file))
-    #model.save_model(output_file)
+    model.save_model(output_file)
 
 
 def label_single_file(input_filepath, output_filepath, label):
@@ -327,7 +333,35 @@ def label_single_file(input_filepath, output_filepath, label):
             g.write(label + " " + text)
     return output_filepath
 
+
+def convert_training_file(input_path, output_path):
+    # converts from json.dumped lines with tags to lowercase words with newline tag and spaces.
+    with open(input_path, 'r') as f_in, open(output_path, 'w') as f_out:
+        for line in f_in:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Split into label and the JSON-encoded string
+            # Format: __label__X "actual text with \n"
+            space_idx = line.index(' ')
+            label_part = line[:space_idx]          # e.g. __label__paloma
+            json_string = line[space_idx + 1:]     # e.g. "the text...\n..."
+            
+            text = json.loads(json_string)
+            
+            # Apply the same normalization as fasttext_normalize_text
+            text = re.sub(r"\r?\n", " <NEW_LINE> ", text)
+            text = re.sub(r"\s+", " ", text)
+            text = text.strip().lower()
+            
+            f_out.write(f"{label_part} {text}\n")
+
+
 if __name__ == "__main__":
+    #convert_training_file('cs336_data/data/paloma_train.jsonl', 'cs336_data/data/paloma_train.txt')
+    #convert_training_file('cs336_data/data/paloma_val.jsonl', 'cs336_data/data/paloma_val.txt')
+    
     train_fasttext_quality_filter(
         "cs336_data/data/paloma_train.txt", "cs336_data/data/paloma_val.txt", "cs336_data/classifiers/paloma.bin"
     )
