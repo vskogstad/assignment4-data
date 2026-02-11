@@ -306,15 +306,19 @@ def train_fasttext_quality_filter(
     model = fasttext.train_supervised(
         input=training_file,
         epoch=10,
-        lr=1,
-        dim=100,
+        lr=0.28,
+        #dim=100,
         wordNgrams=2,
-        bucket=2_000_000,
-        minCount=5,
+        #bucket=2_000_000,
+        minCount=1,
+        loss="hs",
+        thread=1,
+        seed=11,
     )
-    model.quantize(input=training_file, retrain=True)
     print(model.test(validation_file))
-    model.save_model(output_file)
+    #model.quantize(input=training_file, retrain=True)
+    #print(model.test(validation_file))
+    #model.save_model(output_file)
 
 
 def label_single_file(input_filepath, output_filepath, label):
