@@ -1,32 +1,33 @@
 import json
 import random
-import re
 import time
+import os
 from pathlib import Path
 
 import fasttext
-import nltk
+#import nltk
 import regex as re
 from fastwarc.stream_io import *
 from fastwarc.warc import ArchiveIterator, WarcRecordType, has_block_digest
 from resiliparse.extract.html2text import extract_plain_text
 from resiliparse.parse.encoding import detect_encoding
 
-# Load once at module level
-LANG_MODEL = fasttext.load_model("cs336_data/classifiers/lid.176.ftz")
-NSFW_MODEL = fasttext.load_model("cs336_data/classifiers/jigsaw_fasttext_bigrams_nsfw_final.bin")
-TOXIC_MODEL = fasttext.load_model("cs336_data/classifiers/jigsaw_fasttext_bigrams_hatespeech_final.bin")
-QUALITY_MODEL = fasttext.load_model("cs336_data/classifiers/paloma.bin")
+CLASSIFIER_DIR = Path(os.environ.get("CLASSIFIER_DIR", "/models/classifiers"))
+
+LANG_MODEL = fasttext.load_model(str(CLASSIFIER_DIR / "lid.176.ftz"))
+NSFW_MODEL = fasttext.load_model(str(CLASSIFIER_DIR / "jigsaw_fasttext_bigrams_nsfw_final.bin"))
+TOXIC_MODEL = fasttext.load_model(str(CLASSIFIER_DIR / "jigsaw_fasttext_bigrams_hatespeech_final.bin"))
+QUALITY_MODEL = fasttext.load_model(str(CLASSIFIER_DIR / "paloma.bin"))
 
 
-def ensure_nltk_data():
+"""def ensure_nltk_data():
     try:
         nltk.data.find("tokenizers/punkt_tab")
     except LookupError:
         nltk.download("punkt_tab", quiet=True)
 
 
-ensure_nltk_data()  # can't store this within folder structure, need to ensure it is downloaded if not found.
+ensure_nltk_data()  # can't store this within folder structure, need to ensure it is downloaded if not found."""
 
 
 def extract_text(html_bytes):
